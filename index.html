@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pausa Activa - Efecto Stroop</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background: #f4f4f4;
+      padding: 20px;
+    }
+    #word {
+      font-size: 48px;
+      font-weight: bold;
+      margin: 40px;
+    }
+    #result {
+      font-size: 24px;
+      margin: 20px;
+    }
+    #timer {
+      font-size: 20px;
+      margin-bottom: 10px;
+      color: #555;
+    }
+    #scoreboard {
+      margin-top: 40px;
+    }
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎯 Pausa Activa: Efecto Stroop por Voz</h1>
+  <div id="start">
+    <p>Ingresa tu nombre:</p>
+    <input type="text" id="playerName" />
+    <p>Tiempo por palabra (segundos):</p>
+    <input type="number" id="timeInput" min="1" value="10" />
+    <br /><br />
+    <button onclick="startGame()">Iniciar Ronda</button>
+  </div>
+
+  <div id="game" class="hidden">
+    <div id="roundInfo"></div>
+    <div id="timer"></div>
+    <div id="word"></div>
+    <button onclick="listenWord()">🎤 Decir palabra</button>
+    <div id="result"></div>
+    <div id="score">Puntaje: 0</div>
+  </div>
+
+  <div id="scoreboard" class="hidden">
+    <h2>🏆 Tabla de Clasificación</h2>
+    <table border="1" style="margin:auto">
+      <thead>
+        <tr><th>Nombre</th><th>Puntaje</th></tr>
+      </thead>
+      <tbody id="ranking"></tbody>
+    </table>
+    <br />
+    <button onclick="restart()">🔁 Jugar otra vez</button>
+    <button onclick="clearRanking()">🗑️ Limpiar Clasificación</button>
+  </div>
+
+  <script>
+    const words = ["rojo", "azul", "verde", "amarillo", "morado", "naranja"];
+    const colors = ["red", "blue", "green", "yellow", "purple", "orange"];
+    let current = 0;
+    let score = 0;
+    let player = "";
+    let correctWord = "";
+    let timer;
+    let timeLeft;
+    let customTime = 10;
+
+    function startGame() {
+      player = document.getElementById("playerName").value.trim();
+      const inputSeconds = parseInt(document.getElementById("timeInput").value);
+      if (!player) return alert("Por favor ingresa un nombre.");
+      if (isNaN(inputSeconds) || inputSeconds < 1) return alert("Ingresa un tiempo válido mayor a 0.");
+
+      customTime = inputSeconds;
+      document.getElementById("start").classList.add("hidden");
+      document.getElementById("game").classList.remove("hidden");
+      current = 0;
+      score = 0;
+      document.getElementById("score").textContent = "Puntaje: 0";
+      nextWord();
+    }
+
+    function nextWord() {
+      clearInterval(timer);
+      if (current >= 5) {
+        saveScore();
+        showRanking();
+        return;
+      }
+      current++;
+      document.getElementById("roundInfo").textContent = `Palabra ${current} de 5`;
+
+      const word = words[Math.floor(Math.random() * words.length)];
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      correctWord = word;
+      const wordDiv = document.getElementById("word");
+      wordDiv.textContent = word;
+      wordDiv.style.color = color;
+      document.getElementById("result").textContent = "";
+
+      timeLeft = customTime;
+      document.getElementById("timer").textContent = `⏱️ Tiempo restante: ${timeLeft} segundos`;
+      timer = setInterval(() => {
+        timeLeft--;
+        document.getElementById("timer").textContent = `⏱️ Tiempo restante: ${timeLeft} segundos`;
+        if (timeLeft <= 0) {
+          clearInterval(timer);
+          document.getElementById("result").textContent = `⏳ Tiempo agotado. La palabra era: \"${correctWord}\"`;
+          setTimeout(nextWord, 1500);
+        }
+      }, 1000);
+    }
+
+    function listenWord() {
+      const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+      recognition.lang = "es-ES";
+      recognition.start();
+
+      recognition.onresult = (event) => {
+        clearInterval(timer);
+        const said = event.results[0][0].transcript.toLowerCase().trim();
+        if (said === correctWord.toLowerCase()) {
+          document.getElementById("result").textContent = "✅ ¡Correcto!";
+          score++;
+          document.getElementById("score").textContent = `Puntaje: ${score}`;
+        } else {
+          document.getElementById("result").textContent = `❌ Incorrecto. Dijiste: \"${said}\"`;
+        }
+        setTimeout(nextWord, 1500);
+      };
+
+      recognition.onerror = (event) => {
+        alert("Error en reconocimiento de voz. Intenta de nuevo.");
+      };
+    }
+
+    function saveScore() {
+      const allScores = JSON.parse(localStorage.getItem("stroopScores") || "[]");
+      allScores.push({ name: player, score });
+      localStorage.setItem("stroopScores", JSON.stringify(allScores));
+    }
+
+    function showRanking() {
+      document.getElementById("game").classList.add("hidden");
+      document.getElementById("scoreboard").classList.remove("hidden");
+
+      const tbody = document.getElementById("ranking");
+      tbody.innerHTML = "";
+      const scores = JSON.parse(localStorage.getItem("stroopScores") || "[]");
+      scores.sort((a, b) => b.score - a.score);
+      for (const entry of scores) {
+        const row = document.createElement("tr");
+        row.innerHTML = `<td>${entry.name}</td><td>${entry.score}</td>`;
+        tbody.appendChild(row);
+      }
+    }
+
+    function restart() {
+      document.getElementById("scoreboard").classList.add("hidden");
+      document.getElementById("start").classList.remove("hidden");
+      document.getElementById("playerName").value = "";
+      document.getElementById("timeInput").value = "10";
+    }
+
+    function clearRanking() {
+      if (confirm("¿Estás seguro de que deseas borrar la tabla de clasificación?")) {
+        localStorage.removeItem("stroopScores");
+        showRanking();
+      }
+    }
+  </script>
+</body>
+</html>
